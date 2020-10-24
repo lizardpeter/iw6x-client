@@ -7,10 +7,13 @@ namespace game
 
 	Com_Frame_Try_Block_Function_t Com_Frame_Try_Block_Function;
 	Com_Parse_t Com_Parse;
+	Com_Error_t Com_Error;
+	Com_Quit_t Com_Quit;
 
 	Conbuf_AppendText_t Conbuf_AppendText;
 
 	Cbuf_AddText_t Cbuf_AddText;
+	Cbuf_ExecuteBufferInternal_t Cbuf_ExecuteBufferInternal;
 
 	CG_GameMessage_t CG_GameMessage;
 
@@ -20,6 +23,7 @@ namespace game
 	Cmd_ExecuteSingleCommand_t Cmd_ExecuteSingleCommand;
 
 	Dvar_FindVar_t Dvar_FindVar;
+	Dvar_GetCombinedString_t Dvar_GetCombinedString;
 	Dvar_RegisterBool_t Dvar_RegisterBool;
 	Dvar_RegisterEnum_t Dvar_RegisterEnum;
 	Dvar_RegisterFloat_t Dvar_RegisterFloat;
@@ -27,6 +31,9 @@ namespace game
 	Dvar_RegisterString_t Dvar_RegisterString;
 	Dvar_RegisterVec2_t Dvar_RegisterVec2;
 	Dvar_RegisterVec4_t Dvar_RegisterVec4;
+	Dvar_Reset_t Dvar_Reset;
+	Dvar_SetBool_t Dvar_SetBool;
+	Dvar_SetCommand_t Dvar_SetCommand;
 	Dvar_Sort_t Dvar_Sort;
 	Dvar_ValueToString_t Dvar_ValueToString;
 
@@ -34,6 +41,8 @@ namespace game
 	FS_FreeFile_t FS_FreeFile;
 
 	G_RunFrame_t G_RunFrame;
+
+	I_CleanStr_t I_CleanStr;
 
 	Live_SyncOnlineDataFlags_t Live_SyncOnlineDataFlags;
 
@@ -57,13 +66,19 @@ namespace game
 	SV_Loaded_t SV_Loaded;
 
 	SV_StartMap_t SV_StartMap;
+	SV_StartMapForParty_t SV_StartMapForParty;
 
 	SV_AddBot_t SV_AddBot;
+	SV_BotIsBot_t SV_BotIsBot;
 	SV_ExecuteClientCommand_t SV_ExecuteClientCommand;
+	SV_GetGuid_t SV_GetGuid;
 	SV_SpawnTestClient_t SV_SpawnTestClient;
 
 	Sys_Milliseconds_t Sys_Milliseconds;
 	Sys_SendPacket_t Sys_SendPacket;
+
+	UI_LocalizeMapname_t UI_LocalizeMapname;
+	UI_LocalizeMapname_t UI_LocalizeGametype;
 
 	int* keyCatchers;
 
@@ -89,6 +104,7 @@ namespace game
 
 		gentity_s* g_entities;
 
+		int* svs_numclients;
 		client_t* svs_clients;
 
 		std::uint32_t* sv_serverId_value;
@@ -114,20 +130,20 @@ namespace game
 		return sv_cmd_args->argv[sv_cmd_args->nesting][index];
 	}
 
-	launcher::mode mode = launcher::mode::none;
-
-	launcher::mode get_mode()
-	{
-		if (mode == launcher::mode::none)
-		{
-			throw std::runtime_error("Launcher mode not valid. Something must be wrong.");
-		}
-
-		return mode;
-	}
-
 	namespace environment
 	{
+		launcher::mode mode = launcher::mode::none;
+
+		launcher::mode get_mode()
+		{
+			if (mode == launcher::mode::none)
+			{
+				throw std::runtime_error("Launcher mode not valid. Something must be wrong.");
+			}
+
+			return mode;
+		}
+
 		bool is_dedi()
 		{
 			return get_mode() == launcher::mode::server;
@@ -155,8 +171,11 @@ namespace game
 
 			Com_Frame_Try_Block_Function = Com_Frame_Try_Block_Function_t(SELECT_VALUE(0x1403BC980, 0x1404131A0));
 			Com_Parse = Com_Parse_t(SELECT_VALUE(0, 0x1404F50E0));
+			Com_Error = Com_Error_t(SELECT_VALUE(0x1403BBFF0, 0x140412740));
+			Com_Quit = Com_Quit_t(SELECT_VALUE(0x1403BDDD0, 0x140414920));
 
 			Cbuf_AddText = Cbuf_AddText_t(SELECT_VALUE(0x1403B3050, 0x1403F6B50));
+			Cbuf_ExecuteBufferInternal = Cbuf_ExecuteBufferInternal_t(SELECT_VALUE(0x1403B3160, 0x1403F6C60));
 
 			CG_GameMessage = CG_GameMessage_t(SELECT_VALUE(0x1401F2E20, 0x140271320));
 
@@ -166,6 +185,7 @@ namespace game
 			Cmd_ExecuteSingleCommand = Cmd_ExecuteSingleCommand_t(SELECT_VALUE(0x1403B3B10, 0x1403F7680));
 
 			Dvar_FindVar = Dvar_FindVar_t(SELECT_VALUE(0x140429E70, 0x1404ECB60));
+			Dvar_GetCombinedString = Dvar_GetCombinedString_t(SELECT_VALUE(0x1403BFD80, 0x140416B30));
 			Dvar_RegisterBool = Dvar_RegisterBool_t(SELECT_VALUE(0x14042AF10, 0x1404EDD60));
 			Dvar_RegisterEnum = Dvar_RegisterEnum_t(SELECT_VALUE(0x14042B220, 0x1404EE070));
 			Dvar_RegisterFloat = Dvar_RegisterFloat_t(SELECT_VALUE(0x14042B330, 0x1404EE180));
@@ -173,11 +193,16 @@ namespace game
 			Dvar_RegisterString = Dvar_RegisterString_t(SELECT_VALUE(0x14042B7A0, 0x1404EE660));
 			Dvar_RegisterVec2 = Dvar_RegisterVec2_t(SELECT_VALUE(0x14042B880, 0x1404EE740));
 			Dvar_RegisterVec4 = Dvar_RegisterVec4_t(SELECT_VALUE(0x14042BC10, 0x1404EEA50));
+			Dvar_Reset = Dvar_Reset_t(SELECT_VALUE(0x14042C150, 0x1404EF020));
+			Dvar_SetBool = Dvar_SetBool_t(SELECT_VALUE(0x14042C370, 0x1404EF1A0));
+			Dvar_SetCommand = Dvar_SetCommand_t(SELECT_VALUE(0x14042C8E0, 0x1404EF790));
 			Dvar_Sort = Dvar_Sort_t(SELECT_VALUE(0x14042DEF0, 0x1404F1210));
 			Dvar_ValueToString = Dvar_ValueToString_t(SELECT_VALUE(0x14042E710, 0x1404F1A30));
 
 			G_RunFrame = G_RunFrame_t(SELECT_VALUE(0x0, 0x1403A05E0));
-			
+
+			I_CleanStr = I_CleanStr_t(SELECT_VALUE(0x140432460, 0x1404F63C0));
+
 			FS_ReadFile = FS_ReadFile_t(SELECT_VALUE(0x14041D0B0, 0x1404DE900));
 			FS_FreeFile = FS_FreeFile_t(SELECT_VALUE(0x14041D0A0, 0x1404DE8F0));
 
@@ -202,12 +227,18 @@ namespace game
 			SV_GameSendServerCommand = SV_GameSendServerCommand_t(SELECT_VALUE(0x140490F40, 0x1404758C0));
 			SV_Loaded = SV_Loaded_t(SELECT_VALUE(0x140491820, 0x1404770C0));
 			SV_StartMap = SV_StartMap_t(SELECT_VALUE(0, 0x140470170));
+			SV_StartMapForParty = SV_StartMapForParty_t(SELECT_VALUE(0, 0x1404702F0));
 			SV_AddBot = SV_AddBot_t(SELECT_VALUE(0, 0x140470920));
+			SV_BotIsBot = SV_BotIsBot_t(SELECT_VALUE(0, 0x140461340));
 			SV_ExecuteClientCommand = SV_ExecuteClientCommand_t(SELECT_VALUE(0, 0x140472430));
+			SV_GetGuid = SV_GetGuid_t(SELECT_VALUE(0, 0x140475990));
 			SV_SpawnTestClient = SV_SpawnTestClient_t(SELECT_VALUE(0, 0x1404740A0));
 
 			Sys_Milliseconds = Sys_Milliseconds_t(SELECT_VALUE(0x14043D2A0, 0x140501CA0));
 			Sys_SendPacket = Sys_SendPacket_t(SELECT_VALUE(0x14043D000, 0x140501A00));
+
+			UI_LocalizeMapname = UI_LocalizeMapname_t(SELECT_VALUE(0, 0x1404B96D0));
+			UI_LocalizeGametype = UI_LocalizeMapname_t(SELECT_VALUE(0, 0x1404B90F0));
 
 			keyCatchers = reinterpret_cast<int*>(SELECT_VALUE(0x1417CF6E0, 0x1419E1ADC));
 
@@ -232,6 +263,7 @@ namespace game
 
 				mp::g_entities = reinterpret_cast<mp::gentity_s*>(0x14427A0E0);
 
+				mp::svs_numclients = reinterpret_cast<int*>(0x14647B28C);
 				mp::svs_clients = reinterpret_cast<mp::client_t*>(0x14647B290);
 
 				mp::sv_serverId_value = reinterpret_cast<std::uint32_t*>(0x144DF9478);

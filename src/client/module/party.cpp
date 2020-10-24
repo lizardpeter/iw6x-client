@@ -1,149 +1,182 @@
 #include <std_include.hpp>
+#include "loader/module_loader.hpp"
 #include "party.hpp"
 
 #include "command.hpp"
 #include "network.hpp"
+#include "scheduler.hpp"
+#include "server_list.hpp"
 
-#include "utils/hook.hpp"
+#include "steam/steam.hpp"
+
+#include "utils/string.hpp"
+#include "utils/info_string.hpp"
 #include "utils/cryptography.hpp"
 
-namespace
+namespace party
 {
-	struct
+	namespace
 	{
-		game::netadr_s host;
-		std::string challenge;
-	} connect_state;
+		struct
+		{
+			game::netadr_s host{};
+			std::string challenge{};
+		} connect_state;
 
-	void connect_to_party(const game::netadr_s& target, const std::string& mapname, const std::string& gametype)
+		void connect_to_party(const game::netadr_s& target, const std::string& mapname, const std::string& gametype)
+		{
+			if (game::environment::is_sp())
+			{
+				return;
+			}
+
+			if(game::Live_SyncOnlineDataFlags(0))
+			{
+				scheduler::once([=]()
+				{
+					connect_to_party(target, mapname, gametype);
+				}, scheduler::pipeline::main, 1s);
+				return;
+			}
+
+			// This fixes several crashes and impure client stuff
+			command::execute("xstartprivatematch", true);
+			command::execute("xblive_privatematch 1", true);
+
+			// CL_ConnectFromParty
+			char session_info[0x100] = {};
+			reinterpret_cast<void(*)(int, char*, const game::netadr_s*, const char*, const char*)>(0x1402C5700)(
+				0, session_info, &target, mapname.data(), gametype.data());
+		}
+
+		std::string get_dvar_string(const std::string& dvar)
+		{
+			auto* dvar_value = game::Dvar_FindVar(dvar.data());
+			if (dvar_value && dvar_value->current.string)
+			{
+				return dvar_value->current.string;
+			}
+
+			return {};
+		}
+
+		int get_client_count()
+		{
+			auto count = 0;
+			for (auto i = 0; i < *game::mp::svs_numclients; ++i)
+			{
+				if (game::mp::svs_clients[i].header.state >= 3)
+				{
+					++count;
+				}
+			}
+
+			return count;
+		}
+	}
+
+	void connect(const game::netadr_s& target)
 	{
 		if (game::environment::is_sp())
 		{
 			return;
 		}
 
-		// This fixes several crashes and impure client stuff
-		game::Cmd_ExecuteSingleCommand(0, 0, "xblive_privatematch 1\n");
+		command::execute("lui_open popup_acceptinginvite", false);
 
-		// CL_ConnectFromParty
-		char session_info[0x100] = {};
-		reinterpret_cast<void(*)(int, char*, const game::netadr_s*, const char*, const char*)>(0x1402C5700)(
-			0, session_info, &target, mapname.data(), gametype.data());
+		connect_state.host = target;
+		connect_state.challenge = utils::cryptography::random::get_challenge();
+
+		network::send(target, "getInfo", connect_state.challenge);
 	}
 
-	void load_new_map_stub(const char* map, const char* gametype)
+	class module final : public module_interface
 	{
-		connect_to_party(*reinterpret_cast<game::netadr_s*>(0x141CB535C), map, gametype);
-	}
+	public:
+		void post_unpack() override
+		{
+			if (game::environment::is_sp())
+			{
+				return;
+			}
+
+			command::add("map", [](command::params& argument)
+			{
+				if (argument.size() != 2)
+				{
+					return;
+				}
+
+				game::SV_StartMapForParty(0, argument[1], false, false);
+			});
+
+			command::add("connect", [](command::params& argument)
+			{
+				if (argument.size() != 2)
+				{
+					return;
+				}
+
+				game::netadr_s target{};
+				if (game::NET_StringToAdr(argument[1], &target))
+				{
+					connect(target);
+				}
+			});
+
+			network::on("getInfo", [](const game::netadr_s& target, const std::string_view& data)
+			{
+				utils::info_string info{};
+				info.set("challenge", std::string{data});
+				info.set("gamename", "IW6");
+				info.set("hostname", get_dvar_string("sv_hostname"));
+				info.set("gametype", get_dvar_string("g_gametype"));
+				info.set("xuid", utils::string::va("%llX", steam::SteamUser()->GetSteamID().bits));
+				info.set("mapname", get_dvar_string("mapname"));
+				info.set("isPrivate", get_dvar_string("g_password").empty() ? "0" : "1");
+				info.set("clients", utils::string::va("%i", get_client_count()));
+				info.set("sv_maxclients", utils::string::va("%i", *game::mp::svs_numclients));
+				info.set("protocol", utils::string::va("%i", PROTOCOL));
+				//info.set("shortversion", SHORTVERSION);
+				//info.set("hc", (Dvar::Var("g_hardcore").get<bool>() ? "1" : "0"));
+
+				network::send(target, "infoResponse", info.build(), '\n');
+			});
+
+			network::on("infoResponse", [](const game::netadr_s& target, const std::string_view& data)
+			{
+				const utils::info_string info{data};
+				server_list::handle_info_response(target, info);
+
+				if (connect_state.host != target)
+				{
+					return;
+				}
+
+				if (info.get("challenge") != connect_state.challenge)
+				{
+					printf("Invalid challenge.\n");
+					return;
+				}
+
+				const auto mapname = info.get("mapname");
+				if (mapname.empty())
+				{
+					printf("Invalid map.\n");
+					return;
+				}
+
+				const auto gametype = info.get("gametype");
+				if (gametype.empty())
+				{
+					printf("Invalid gametype.\n");
+					return;
+				}
+
+				connect_to_party(target, mapname, gametype);
+			});
+		}
+	};
 }
 
-void party::connect(const game::netadr_s& target)
-{
-	if (game::environment::is_sp())
-	{
-		return;
-	}
-
-	connect_state.host = target;
-	connect_state.challenge = utils::cryptography::random::get_challenge();
-
-	network::send(target, "preConnect", connect_state.challenge);
-}
-
-void party::post_unpack()
-{
-	if (game::environment::is_sp())
-	{
-		return;
-	}
-
-	// Hook CL_SetupForNewServerMap
-	// The server seems to kick us after a map change
-	// This fix is pretty bad, but it works for now
-	utils::hook::jump(0x1402C9F60, &load_new_map_stub);
-
-	command::add("map", [](command::params& argument)
-	{
-		if (argument.size() != 2)
-		{
-			return;
-		}
-
-		game::SV_StartMap(0, argument[1], false);
-	});
-
-	command::add("connect", [](command::params& argument)
-	{
-		if (argument.size() != 2)
-		{
-			return;
-		}
-
-		game::netadr_s target{};
-		if (game::NET_StringToAdr(argument[1], &target))
-		{
-			party::connect(target);
-		}
-	});
-
-	network::on("preConnect", [](const game::netadr_s& target, const std::string_view& data)
-	{
-		proto::network::connect_info info;
-		info.set_valid(true);
-		info.set_challenge(data.data(), data.size());
-
-		auto* gametype = game::Dvar_FindVar("g_gametype");
-		if (!gametype || !gametype->current.string)
-		{
-			info.set_valid(false);
-		}
-		else
-		{
-			info.set_gametype(gametype->current.string);
-		}
-
-		auto* mapname = game::Dvar_FindVar("mapname");
-		if (!mapname || !mapname->current.string)
-		{
-			info.set_valid(false);
-		}
-		else
-		{
-			info.set_mapname(mapname->current.string);
-		}
-
-		network::send(target, "preConnectResponse", info.SerializeAsString());
-	});
-
-	network::on("preConnectResponse", [](const game::netadr_s& target, const std::string_view& data)
-	{
-		if (!network::are_addresses_equal(connect_state.host, target))
-		{
-			printf("Connect response from stray host.\n");
-			return;
-		}
-
-		proto::network::connect_info info;
-		if (!info.ParseFromArray(data.data(), static_cast<int>(data.size())))
-		{
-			printf("Unable to read connect response data.\n");
-			return;
-		}
-
-		if (!info.valid())
-		{
-			printf("Invalid connect response data.\n");
-			return;
-		}
-
-		if (info.challenge() != connect_state.challenge)
-		{
-			printf("Invalid challenge.\n");
-			return;
-		}
-
-		connect_to_party(target, info.mapname(), info.gametype());
-	});
-}
-
-REGISTER_MODULE(party)
+REGISTER_MODULE(party::module)

@@ -16,7 +16,7 @@ namespace utils::string
 		return result;
 	}
 
-	std::vector<std::string> split(const std::string& s, char delim)
+	std::vector<std::string> split(const std::string& s, const char delim)
 	{
 		std::stringstream ss(s);
 		std::string item;
@@ -78,10 +78,10 @@ namespace utils::string
 		{
 			std::string data;
 
-			HANDLE clipboard_data = GetClipboardData(1u);
+			const auto clipboard_data = GetClipboardData(1u);
 			if (clipboard_data)
 			{
-				auto cliptext = reinterpret_cast<char*>(GlobalLock(clipboard_data));
+				const auto cliptext = static_cast<char*>(GlobalLock(clipboard_data));
 				if (cliptext)
 				{
 					data.append(cliptext);
@@ -93,5 +93,31 @@ namespace utils::string
 			return data;
 		}
 		return {};
+	}
+
+	void strip(const char* in, char* out, int max)
+	{
+		if (!in || !out) return;
+
+		max--;
+		auto current = 0;
+		while (*in != 0 && current < max)
+		{
+			const auto color_index = (*(in + 1) - 48) >= 0xC ? 7 : (*(in + 1) - 48);
+			
+			if (*in == '^' && (color_index != 7 || *(in + 1) == '7'))
+			{
+				++in;
+			}
+			else
+			{
+				*out = *in;
+				++out;
+				++current;
+			}
+
+			++in;
+		}
+		*out = '\0';
 	}
 }

@@ -15,14 +15,24 @@ namespace game
 	typedef void (*Com_Frame_Try_Block_Function_t)();
 	extern Com_Frame_Try_Block_Function_t Com_Frame_Try_Block_Function;
 
-	typedef const char* (*Com_Parse_t)(char const **);
+	typedef const char* (*Com_Parse_t)(char const**);
 	extern Com_Parse_t Com_Parse;
+
+	typedef void (*Com_Error_t)(int type, const char* message, ...);
+	extern Com_Error_t Com_Error;
+
+	typedef void (*Com_Quit_t)();
+	extern Com_Quit_t Com_Quit;
 
 	typedef void (*Conbuf_AppendText_t)(const char* message);
 	extern Conbuf_AppendText_t Conbuf_AppendText;
 
 	typedef void (*Cbuf_AddText_t)(int localClientNum, const char* text);
 	extern Cbuf_AddText_t Cbuf_AddText;
+
+	typedef void (*Cbuf_ExecuteBufferInternal_t)(int localClientNum, int controllerIndex, const char* buffer,
+	                                             void (*singleExecCmd)(int, int, const char*));
+	extern Cbuf_ExecuteBufferInternal_t Cbuf_ExecuteBufferInternal;
 
 	typedef bool (*CL_IsCgameInitialized_t)();
 	extern CL_IsCgameInitialized_t CL_IsCgameInitialized;
@@ -38,6 +48,9 @@ namespace game
 
 	typedef dvar_t* (*Dvar_FindVar_t)(const char* name);
 	extern Dvar_FindVar_t Dvar_FindVar;
+
+	typedef void (*Dvar_GetCombinedString_t)(char* buffer, int index);
+	extern Dvar_GetCombinedString_t Dvar_GetCombinedString;
 
 	typedef dvar_t* (*Dvar_RegisterBool_t)(const char* dvarName, bool value, unsigned int flags,
 	                                       const char* description);
@@ -67,20 +80,32 @@ namespace game
 	                                       float max, unsigned int flags, const char* description);
 	extern Dvar_RegisterVec4_t Dvar_RegisterVec4;
 
+	typedef void (*Dvar_Reset_t)(dvar_t* dvar, DvarSetSource source);
+	extern Dvar_Reset_t Dvar_Reset;
+
+	typedef void (*Dvar_SetBool_t)(dvar_t* dvar, bool value);
+	extern Dvar_SetBool_t Dvar_SetBool;
+
+	typedef void (*Dvar_SetCommand_t)(const char* dvar, const char* buffer);
+	extern Dvar_SetCommand_t Dvar_SetCommand;
+
 	typedef void (*Dvar_Sort_t)();
 	extern Dvar_Sort_t Dvar_Sort;
 
 	typedef const char* (*Dvar_ValueToString_t)(dvar_t* dvar, dvar_value value);
 	extern Dvar_ValueToString_t Dvar_ValueToString;
 
-	typedef unsigned __int64 (*FS_ReadFile_t)(const char *qpath, char **buffer);
+	typedef long long (*FS_ReadFile_t)(const char* qpath, char** buffer);
 	extern FS_ReadFile_t FS_ReadFile;
 
-	typedef void (*FS_FreeFile_t)(void *buffer);
+	typedef void (*FS_FreeFile_t)(void* buffer);
 	extern FS_FreeFile_t FS_FreeFile;
 
 	typedef int (*G_RunFrame_t)(int server_time);
 	extern G_RunFrame_t G_RunFrame;
+
+	typedef char* (*I_CleanStr_t)(char* string);
+	extern I_CleanStr_t I_CleanStr;
 
 	typedef unsigned int (*Live_SyncOnlineDataFlags_t)(int);
 	extern Live_SyncOnlineDataFlags_t Live_SyncOnlineDataFlags;
@@ -126,11 +151,20 @@ namespace game
 	typedef void (*SV_StartMap_t)(int localClientNum, const char* map, bool mapIsPreloaded);
 	extern SV_StartMap_t SV_StartMap;
 
+	typedef void (*SV_StartMapForParty_t)(int localClientNum, const char* map, bool mapIsPreloaded, bool migrate);
+	extern SV_StartMapForParty_t SV_StartMapForParty;
+
 	typedef mp::gentity_s* (*SV_AddBot_t)(const char*, unsigned int, unsigned int, unsigned int);
 	extern SV_AddBot_t SV_AddBot;
 
+	typedef bool (*SV_BotIsBot_t)(int clientNum);
+	extern SV_BotIsBot_t SV_BotIsBot;
+
 	typedef void (*SV_ExecuteClientCommand_t)(mp::client_t*, const char*, int);
 	extern SV_ExecuteClientCommand_t SV_ExecuteClientCommand;
+
+	typedef const char* (*SV_GetGuid_t)(int clientNum);
+	extern SV_GetGuid_t SV_GetGuid;
 
 	typedef void (*SV_SpawnTestClient_t)(mp::gentity_s*);
 	extern SV_SpawnTestClient_t SV_SpawnTestClient;
@@ -141,6 +175,10 @@ namespace game
 	//typedef bool (*Sys_SendPacket_t)(netsrc_t, int, void const*, netadr_s); // Actual
 	typedef bool (*Sys_SendPacket_t)(int, void const*, const netadr_s*); // Compiler-optimized
 	extern Sys_SendPacket_t Sys_SendPacket;
+
+	typedef const char* (*UI_LocalizeMapname_t)(const char*);
+	extern UI_LocalizeMapname_t UI_LocalizeMapname;
+	extern UI_LocalizeMapname_t UI_LocalizeGametype;
 
 	extern int* keyCatchers;
 
@@ -165,6 +203,7 @@ namespace game
 
 		extern gentity_s* g_entities;
 
+		extern int* svs_numclients;
 		extern client_t* svs_clients;
 
 		extern std::uint32_t* sv_serverId_value;
@@ -178,6 +217,8 @@ namespace game
 
 	namespace environment
 	{
+		launcher::mode get_mode();
+
 		bool is_mp();
 		bool is_sp();
 		bool is_dedi();

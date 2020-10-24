@@ -70,10 +70,10 @@ namespace steam
 
 		struct result final
 		{
-			void* data;
-			int size;
-			int type;
-			uint64_t call;
+			void* data{};
+			int size{};
+			int type{};
+			uint64_t call{};
 		};
 
 		static uint64_t register_call();
@@ -99,6 +99,7 @@ namespace steam
 	STEAM_EXPORT void SteamAPI_Shutdown();
 	STEAM_EXPORT void SteamAPI_UnregisterCallResult();
 	STEAM_EXPORT void SteamAPI_UnregisterCallback();
+	STEAM_EXPORT const char* SteamAPI_GetSteamInstallPath();
 
 	STEAM_EXPORT bool SteamGameServer_Init();
 	STEAM_EXPORT void SteamGameServer_RunCallbacks();
@@ -113,8 +114,4 @@ namespace steam
 	STEAM_EXPORT utils* SteamUtils();
 	STEAM_EXPORT apps* SteamApps();
 	STEAM_EXPORT user_stats* SteamUserStats();
-
-	std::string get_steam_install_directory();
-
-	extern ::utils::nt::module overlay;
 }
